@@ -8,12 +8,20 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { RegisterDto, LoginDto } from './dto';
 import * as argon from 'argon2';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable({})
 export class AuthService {
   constructor(
     private prismaService: PrismaService,
+    private jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
+
+  /**
+   * REGISTER
+   */
   async signUp(dto: RegisterDto) {
     //GENERATE PASSWORD
     const hash = await argon.hash(dto.password);
@@ -68,7 +76,10 @@ export class AuthService {
     }
   }
 
-  async login(dto: LoginDto) {
+  /**
+   * LOGIN WITHOUT JWT
+   */
+  async loginWithoutJwt(dto: LoginDto) {
     //FIND USER BY EMAIL
     const allUsers =
       await this.prismaService.user.findMany();
@@ -78,7 +89,7 @@ export class AuthService {
     const user =
       await this.prismaService.user.findUnique({
         where: {
-         // id: 1
+          // id: 1
           email: dto.email,
         },
       });
@@ -124,4 +135,91 @@ export class AuthService {
     //SEND BACK USER DATA AND TOKEN
     return { status: 200, user: user };
   }
+
+  /**
+   * LOGIN WITH JWT
+   */
+
+  async login(dto: LoginDto) {
+    //FIND USER BY EMAIL
+    const user =
+      await this.prismaService.user.findUnique({
+        where: {
+          //email: dto.email,
+          id: 1
+        },
+      });
+    //IF USER DOES NOT EXIST THROW EXCEPTION
+
+    if (!user) {
+      throw new HttpException(
+        {
+          status: 200, //HttpStatus.FORBIDDEN,
+          error: 'Email already used',
+        },
+        200,
+        {
+          cause: `Already email is used`,
+        },
+      );
+    }
+
+    //COMPARE HASH
+
+    const passwordMatchCheck = await argon.verify(
+      user.hash,
+      dto.password,
+    );
+
+    if (!passwordMatchCheck) {
+      throw new HttpException(
+        {
+          status: 200,
+          error: 'Password Invalid',
+        },
+        200,
+        {
+          cause: 'Invalid Password',
+        },
+      );
+    }
+
+    delete user.hash;
+
+    const jwTtoken =  await this.signToken(user.id,user.email)
+    //const result: string = await this.convertPromiseToString(jwTtoken);
+    console.log(`${jwTtoken}`);
+    
+    //SEND BACK USER DATA AND TOKEN
+    return { status: 200, user: user , token: jwTtoken };
+   //return this.signToken(user.id,user.email) 
+  }
+
+private  async signToken(
+    userId: number,
+    email: string,
+  ): Promise<string> {
+    const payload = { sub: userId, email };
+
+    const secret = this.configService.get(
+      'JWT_SECRET_KEY',
+    );
+
+    const accessToken = await this.jwtService.signAsync(payload, {
+      expiresIn: '15m',
+      secret: secret,
+    });
+
+    console.log(`${accessToken}`);
+
+   
+    
+    return  `${accessToken}`
+  }
+
+  async convertPromiseToString(promise: Promise<string>): Promise<string> {
+    const result: string = await promise;
+    return result;
+  }
+
 }
