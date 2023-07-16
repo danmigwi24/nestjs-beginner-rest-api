@@ -5,7 +5,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { AuthDto } from './dto';
+import { RegisterDto, LoginDto } from './dto';
 import * as argon from 'argon2';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
@@ -14,7 +14,7 @@ export class AuthService {
   constructor(
     private prismaService: PrismaService,
   ) {}
-  async signUp(dto: AuthDto) {
+  async signUp(dto: RegisterDto) {
     //GENERATE PASSWORD
     const hash = await argon.hash(dto.password);
 
@@ -68,7 +68,60 @@ export class AuthService {
     }
   }
 
-  login() {
-    return { message: 'Login' };
+  async login(dto: LoginDto) {
+    //FIND USER BY EMAIL
+    const allUsers =
+      await this.prismaService.user.findMany();
+    //const filteredUsers = allUsers.filter({user => user.email == dto.email})
+    console.log(allUsers);
+
+    const user =
+      await this.prismaService.user.findUnique({
+        where: {
+         // id: 1
+          email: dto.email,
+        },
+      });
+    //IF USER DOES NOT EXIST THROW EXCEPTION
+
+    console.log(user);
+
+    if (!user) {
+      throw new HttpException(
+        {
+          status: 200, //HttpStatus.FORBIDDEN,
+          error: 'Email already used',
+        },
+        //HttpStatus.FORBIDDEN,
+        200,
+        {
+          cause: `Already email is used`,
+        },
+      );
+    }
+
+    //COMPARE HASH
+
+    const passwordMatchCheck = await argon.verify(
+      user.hash,
+      dto.password,
+    );
+
+    if (!passwordMatchCheck) {
+      throw new HttpException(
+        {
+          status: 200,
+          error: 'Password Invalid',
+        },
+        200,
+        {
+          cause: 'Invalid Password',
+        },
+      );
+    }
+
+    delete user.hash;
+    //SEND BACK USER DATA AND TOKEN
+    return { status: 200, user: user };
   }
 }
