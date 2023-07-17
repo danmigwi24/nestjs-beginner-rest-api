@@ -142,11 +142,11 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     //FIND USER BY EMAIL
-    const user =
+    var user =
       await this.prismaService.user.findUnique({
         where: {
           //email: dto.email,
-          id: 1
+          id: 1,
         },
       });
     //IF USER DOES NOT EXIST THROW EXCEPTION
@@ -186,16 +186,28 @@ export class AuthService {
 
     delete user.hash;
 
-    const jwTtoken =  await this.signToken(user.id,user.email)
+    const jwTtoken = await this.signToken(
+      user.id,
+      user.email,
+    );
     //const result: string = await this.convertPromiseToString(jwTtoken);
     console.log(`${jwTtoken}`);
-    
+
+    user['accesstoken'] = jwTtoken;
+
     //SEND BACK USER DATA AND TOKEN
-    return { status: 200, user: user , token: jwTtoken };
-   //return this.signToken(user.id,user.email) 
+    return {
+      status: 200,
+      user: user,
+      token: jwTtoken,
+    };
+    //return this.signToken(user.id,user.email)
   }
 
-private  async signToken(
+  /**
+   * GENERATE JWT
+   */
+  private async signToken(
     userId: number,
     email: string,
   ): Promise<string> {
@@ -205,21 +217,21 @@ private  async signToken(
       'JWT_SECRET_KEY',
     );
 
-    const accessToken = await this.jwtService.signAsync(payload, {
-      expiresIn: '15m',
-      secret: secret,
-    });
+    const accessToken =
+      await this.jwtService.signAsync(payload, {
+        expiresIn: '15m',
+        secret: secret,
+      });
 
     console.log(`${accessToken}`);
 
-   
-    
-    return  `${accessToken}`
+    return `${accessToken}`;
   }
 
-  async convertPromiseToString(promise: Promise<string>): Promise<string> {
+  async convertPromiseToString(
+    promise: Promise<string>,
+  ): Promise<string> {
     const result: string = await promise;
     return result;
   }
-
 }
