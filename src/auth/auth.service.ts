@@ -18,7 +18,6 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
   ) {}
-
   /**
    * REGISTER
    */
